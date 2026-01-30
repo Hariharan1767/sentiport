@@ -8,6 +8,11 @@
 
 ## 🎯 START HERE (Pick One)
 
+### 🚀 I Have GitHub Desktop - Push NOW (FASTEST!)
+→ **Read**: `GITHUB_DESKTOP_QUICK_START.md`  
+→ **Time**: 2 minutes  
+→ **Then**: Code on GitHub + VS Code! ✅
+
 ### 🚀 I Want to Push to GitHub NOW
 → **Read**: `GITHUB_CONNECT.md`  
 → **Time**: 2-5 minutes  
@@ -37,6 +42,8 @@
 ### GitHub Integration
 | File | Purpose | Read Time |
 |------|---------|-----------|
+| **GITHUB_DESKTOP_QUICK_START.md** | GitHub Desktop in 2 min | 2 min |
+| **GITHUB_DESKTOP_SETUP.md** | Full GitHub Desktop guide | 10 min |
 | **GITHUB_CONNECT.md** | Step-by-step GitHub setup | 10 min |
 | **GITHUB_SETUP.md** | Initial GitHub instructions | 5 min |
 
