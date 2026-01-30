@@ -1,8 +1,0 @@
-# Add this to your PowerShell profile to use 'git' command directly
-# To edit your profile, run: notepad $PROFILE
-
-$env:PATH += ";C:\Program Files\Git\bin"
-$env:PATH += ";C:\Program Files\Git\cmd"
-
-# Create git alias for easier access
-Set-Alias git "C:\Program Files\Git\bin\git.exe"
