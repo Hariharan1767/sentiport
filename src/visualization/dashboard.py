@@ -15,6 +15,8 @@ from src.data_collection.stock_data import StockDataCollector # Mock or real
 from src.data_collection.sentiment_data import SentimentDataPreparer
 from src.visualization.charts import ChartGenerator
 from src.evaluation.backtester import Backtester
+from src.prediction.orchestrator import StockAnalysisOrchestrator
+from src.visualization.analysis_ui import render_stock_analysis_page
 
 # Page Config
 st.set_page_config(
@@ -42,13 +44,18 @@ date_range = st.sidebar.date_input(
 )
 
 # Tabs
-tab1, tab2, tab3 = st.tabs(["Data Explorer", "Sentiment Analysis", "Backtesting"])
+tab1, tab2, tab3, tab4 = st.tabs([
+    "Data Explorer",
+    "Sentiment Analysis",
+    "Backtesting",
+    "🔍 Deep Analysis (9-Factor)"
+])
 
 @st.cache_data
 def load_mock_data(tickers, start, end):
     # Mock data generator for demo purposes if real data missing
     dates = pd.date_range(start, end, freq='B')
-    
+
     # Prices
     price_data = []
     for t in tickers:
@@ -140,6 +147,11 @@ with tab3:
             except Exception as e:
                 st.error(f"Backtest failed: {str(e)}")
                 st.write("Ensure date range is long enough for training window.")
+
+with tab4:
+    # Initialize orchestrator
+    orchestrator = StockAnalysisOrchestrator()
+    render_stock_analysis_page(orchestrator)
 
 st.sidebar.markdown("---")
 st.sidebar.caption("Project SentiPort · 2026")

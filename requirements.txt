@@ -16,6 +16,9 @@ gensim==4.3.2
 # Optimization
 cvxpy==1.3.2
 
+# Technical Analysis
+pandas_ta
+
 # Visualization
 matplotlib==3.8.2
 seaborn==0.13.0
