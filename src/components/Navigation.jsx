@@ -1,60 +1,41 @@
-import { TrendingUp, Menu, X } from 'lucide-react';
-import { useState } from 'react';
+import { TrendingUp } from 'lucide-react'
 
-const Navigation = () => {
-  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-  const navLinks = ['Dashboard', 'Optimize', 'Analysis', 'Settings'];
+const NAV_LINKS = [
+  { id: 'dashboard', label: 'Dashboard' },
+  { id: 'analysis', label: 'Analysis' },
+  { id: 'optimize', label: 'Optimize' },
+  { id: 'settings', label: 'Settings' },
+]
 
+export default function Navigation({ currentPage, onNavigate }) {
   return (
-    <nav className="glass-nav sticky top-0 z-50">
-      <div className="container mx-auto px-4 py-4 flex items-center justify-between">
-        {/* Logo */}
-        <div className="flex items-center gap-2">
-          <div className="bg-gradient-to-r from-accent to-green-400 p-2 rounded-lg glow">
-            <TrendingUp className="w-6 h-6 text-primary" />
+    <nav className="fixed top-0 left-0 right-0 z-50 bg-gray-900/80 backdrop-blur border-b border-gray-800">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div className="flex items-center justify-between h-16">
+          {/* Brand */}
+          <div className="flex items-center gap-2">
+            <TrendingUp className="w-7 h-7 text-emerald-400" />
+            <span className="text-lg font-bold tracking-tight">SentiPort</span>
           </div>
-          <span className="text-xl font-bold">SentiPort</span>
-        </div>
 
-        {/* Desktop Links */}
-        <div className="hidden md:flex items-center gap-8">
-          {navLinks.map((link) => (
-            <a
-              key={link}
-              href={`#${link.toLowerCase()}`}
-              className="text-gray-300 hover:text-accent transition-smooth pb-1 border-b-2 border-transparent hover:border-accent"
-            >
-              {link}
-            </a>
-          ))}
+          {/* Links */}
+          <div className="flex items-center gap-1">
+            {NAV_LINKS.map(({ id, label }) => (
+              <button
+                key={id}
+                id={`nav-${id}`}
+                onClick={() => onNavigate(id)}
+                className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${currentPage === id
+                    ? 'bg-emerald-500/20 text-emerald-400'
+                    : 'text-gray-400 hover:text-white hover:bg-gray-800'
+                  }`}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
         </div>
-
-        {/* Mobile Menu Button */}
-        <button
-          type="button"
-          className="md:hidden text-accent"
-          onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-        >
-          {mobileMenuOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
-        </button>
       </div>
-
-      {/* Mobile Menu */}
-      {mobileMenuOpen && (
-        <div className="md:hidden glass-nav border-t border-accent/20 p-4">
-          {navLinks.map((link) => (
-            <a
-              key={link}
-              href={`#${link.toLowerCase()}`}
-              className="block py-2 text-accent hover:text-green-300 transition-smooth"
-            >
-              {link}
-            </a>
-          ))}
-        </div>
-      )}
     </nav>
-  );
-};
-
-export default Navigation;
+  )
+}

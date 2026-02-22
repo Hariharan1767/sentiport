@@ -94,21 +94,44 @@ class FundamentalAnalyzer:
             "details": details
         }
 
-    def analyze_growth_potential(self, data):
+    def analyze(self, data):
         """
-        Analyzes Long-Term Growth (Factor 9).
+        Unified entry point called by api_server.py.
+        Runs all fundamental sub-analyses and returns a normalised 0-100 score.
         """
-        info = data.get('info', {})
-        score = 0
-        details = []
-        
-        earnings_growth = info.get('earningsGrowth', 0)
-        if earnings_growth and earnings_growth > 0.15:
-            score += 1
-            details.append("High Projected Earnings Growth")
-        
-        return {
-            "score": score,
-            "max_score": 1,
-            "details": details
-        }
+        if not data or not isinstance(data, dict):
+            return {'score': 50, 'rating': 'N/A', 'details': []}
+
+        try:
+            health = self.analyze_health(data)
+            valuation = self.analyze_valuation(data)
+            growth = self.analyze_growth_potential(data)
+
+            # Normalise each sub-score to 0-100
+            def to_pct(result):
+                max_s = result.get('max_score', 1) or 1
+                return (result.get('score', 0) / max_s) * 100
+
+            composite = (to_pct(health) * 0.5 + to_pct(valuation) * 0.3 + to_pct(growth) * 0.2)
+
+            all_details = health.get('details', []) + valuation.get('details', []) + growth.get('details', [])
+
+            if composite >= 70:
+                rating = 'STRONG'
+            elif composite >= 45:
+                rating = 'AVERAGE'
+            else:
+                rating = 'WEAK'
+
+            return {
+                'score': round(composite, 1),
+                'rating': rating,
+                'details': all_details,
+                'sub_scores': {
+                    'health': round(to_pct(health), 1),
+                    'valuation': round(to_pct(valuation), 1),
+                    'growth': round(to_pct(growth), 1),
+                }
+            }
+        except Exception as e:
+            return {'score': 50, 'rating': 'N/A', 'details': [str(e)]}

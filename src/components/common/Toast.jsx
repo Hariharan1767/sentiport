@@ -79,3 +79,5 @@ ToastContainer.propTypes = {
 };
 
 export { Toast, ToastContainer };
+
+export default Toast;

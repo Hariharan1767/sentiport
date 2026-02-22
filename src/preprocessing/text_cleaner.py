@@ -10,6 +10,7 @@ from nltk.stem import WordNetLemmatizer
 from sklearn.base import BaseEstimator, TransformerMixin
 import joblib
 from pathlib import Path
+import pandas as pd
 from typing import List, Optional, Union
 
 # Configure logging

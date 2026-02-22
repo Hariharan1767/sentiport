@@ -17,9 +17,19 @@ from sklearn.pipeline import Pipeline
 from sklearn.model_selection import train_test_split, GridSearchCV, StratifiedKFold
 from sklearn.metrics import classification_report, accuracy_score, confusion_matrix, f1_score
 
-from src.preprocessing.text_cleaner import TextPreprocessor
+try:
+    from textblob import TextBlob
+    _TEXTBLOB_AVAILABLE = True
+except ImportError:
+    _TEXTBLOB_AVAILABLE = False
+
+try:
+    from src.preprocessing.text_cleaner import TextPreprocessor
+except ImportError:
+    TextPreprocessor = None
 
 logger = logging.getLogger(__name__)
+
 
 class SentimentClassifier:
     """
@@ -192,6 +202,50 @@ class SentimentClassifier:
         
         logger.info(f"Model loaded from {filepath}")
         return self
+
+    def predict_sentiment(self, text: str) -> Dict[str, Any]:
+        """
+        Predict sentiment for a single text string.
+        Used by api_server.py for quick per-article scoring.
+        
+        Returns:
+            {'label': 'POSITIVE'|'NEUTRAL'|'NEGATIVE', 'score': float 0-1}
+        
+        Tries trained pipeline first; falls back to TextBlob if no model loaded.
+        """
+        if not text or not isinstance(text, str):
+            return {'label': 'NEUTRAL', 'score': 0.5}
+        
+        # Try trained ML pipeline first
+        if self.pipeline is not None:
+            try:
+                pred = self.pipeline.predict([text])[0]
+                # Map label to score
+                label_map = {1: 'POSITIVE', 0: 'NEUTRAL', -1: 'NEGATIVE',
+                             'positive': 'POSITIVE', 'neutral': 'NEUTRAL', 'negative': 'NEGATIVE'}
+                label = label_map.get(pred, 'NEUTRAL')
+                score = 0.75 if label == 'POSITIVE' else 0.5 if label == 'NEUTRAL' else 0.25
+                return {'label': label, 'score': score}
+            except Exception:
+                pass
+        
+        # Fallback: TextBlob polarity
+        if _TEXTBLOB_AVAILABLE:
+            try:
+                polarity = TextBlob(text).sentiment.polarity  # -1 to 1
+                score = (polarity + 1) / 2  # Normalise to 0-1
+                if score > 0.6:
+                    label = 'POSITIVE'
+                elif score < 0.4:
+                    label = 'NEGATIVE'
+                else:
+                    label = 'NEUTRAL'
+                return {'label': label, 'score': round(score, 4)}
+            except Exception:
+                pass
+        
+        return {'label': 'NEUTRAL', 'score': 0.5}
+
 
 if __name__ == "__main__":
     # Test run

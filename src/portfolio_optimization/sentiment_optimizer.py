@@ -2,11 +2,11 @@
 Sentiment-Enhanced Portfolio Optimizer.
 """
 
-import pandas as pd
 import numpy as np
-from typing import Dict, Optional
+import pandas as pd
+from typing import Dict, Optional, Tuple, Union
 import logging
-from src.portfolio_optimization.mean_variance import MeanVarianceOptimizer
+from portfolio_optimization.mean_variance import MeanVarianceOptimizer
 
 logger = logging.getLogger(__name__)
 
@@ -16,65 +16,66 @@ class SentimentEnhancedOptimizer(MeanVarianceOptimizer):
     """
     
     def __init__(self, risk_free_rate: float = 0.02, sentiment_sensitivity: float = 0.1):
-        """
-        Args:
-            risk_free_rate: Annualized risk-free rate
-            sentiment_sensitivity: Lambda parameter (how much sentiment affects returns)
-        """
         super().__init__(risk_free_rate)
         self.sentiment_sensitivity = sentiment_sensitivity
         
-    def adjust_expected_returns(self, expected_returns: pd.Series, 
-                                sentiment_scores: pd.Series) -> pd.Series:
+    def adjust_expected_returns(
+        self,
+        expected_returns: Union[np.ndarray, pd.Series],
+        sentiment_weights: Dict[str, float],
+        tickers: Optional[list] = None
+    ) -> np.ndarray:
         """
-        Adjust expected returns based on sentiment.
-        Formula: E[r]_adj = E[r] * (1 + sensitivity * sentiment)
-        OR: E[r]_adj = E[r] + (sensitivity * sentiment * vol) <- More Black-Litterman
-        
-        Using simple adjustment for now:
-        If sentiment is positive, increase expected return.
+        Adjust expected returns based on sentiment scores.
+        sentiment_weights: dict mapping ticker -> score (0-1 range from api_server)
         """
-        # Align series
-        common = expected_returns.index.intersection(sentiment_scores.index)
-        if len(common) < len(expected_returns):
-            logger.warning(f"Sentiment missing for some assets. Adjusted only overlapping: {common}")
-            
-        er_adj = expected_returns.copy()
+        if isinstance(expected_returns, pd.Series):
+            er = expected_returns.copy()
+            for ticker, raw_score in sentiment_weights.items():
+                if ticker in er.index:
+                    # Convert 0-1 score to -1..+1 adjustment
+                    sentiment = (raw_score - 0.5) * 2
+                    er[ticker] += self.sentiment_sensitivity * sentiment
+            return er
+        else:
+            er = np.array(expected_returns, dtype=float).copy()
+            if tickers:
+                for i, ticker in enumerate(tickers):
+                    raw_score = sentiment_weights.get(ticker, 0.5)
+                    sentiment = (raw_score - 0.5) * 2
+                    er[i] += self.sentiment_sensitivity * sentiment
+            return er
         
-        # Assumption: Sentiment is in [-1, 1]
-        # Adjustment: Add (Sensitivity * Sentiment) to annualized return? 
-        # Or multiplicative?
-        # Let's use additive adjustment: Return += (Sensitivity * Sentiment)
-        # E.g. if sentiment is 0.5 and sensitivity is 0.1, add 5% to return estimate.
-        
-        for ticker in common:
-            sentiment = sentiment_scores[ticker]
-            er_adj[ticker] += (self.sentiment_sensitivity * sentiment)
-            
-        return er_adj
-        
-    def optimize(self, expected_returns: pd.Series, covariance_matrix: pd.DataFrame,
-                 sentiment_scores: Optional[pd.Series] = None,
-                 objective: str = 'max_sharpe') -> Dict[str, float]:
+    def optimize(
+        self,
+        expected_returns: Union[np.ndarray, pd.Series],
+        covariance_matrix: Union[np.ndarray, pd.DataFrame],
+        sentiment_weights: Optional[Dict] = None,
+        objective: str = 'max_sharpe',
+        target_return: Optional[float] = None,
+        tickers: Optional[list] = None,
+    ) -> Tuple[np.ndarray, Dict]:
         """
         Optimize with sentiment adjustment.
+        Returns (weights_array, metrics_dict) to match api_server expectations.
         """
-        if sentiment_scores is not None:
+        if sentiment_weights:
             logger.info(f"Adjusting returns with sentiment (lambda={self.sentiment_sensitivity})")
-            expected_returns = self.adjust_expected_returns(expected_returns, sentiment_scores)
+            expected_returns = self.adjust_expected_returns(
+                expected_returns, sentiment_weights, tickers=tickers
+            )
             
-        return super().optimize(expected_returns, covariance_matrix, objective)
+        return super().optimize(expected_returns, covariance_matrix, objective=objective)
+
 
 if __name__ == "__main__":
-    # Test
     mu = pd.Series([0.1, 0.2], index=['AAPL', 'TSLA'])
     cov = pd.DataFrame([[0.04, 0.01], [0.01, 0.09]], index=['AAPL', 'TSLA'], columns=['AAPL', 'TSLA'])
-    sent = pd.Series([0.5, -0.2], index=['AAPL', 'TSLA'])
+    sent = {'AAPL': 0.8, 'TSLA': 0.3}
     
-    # Baseline
-    print("Baseline:", MeanVarianceOptimizer().optimize(mu, cov))
+    baseline_w, baseline_m = MeanVarianceOptimizer().optimize(mu, cov)
+    print("Baseline weights:", dict(zip(['AAPL', 'TSLA'], baseline_w)))
     
-    # Enhanced
     opt = SentimentEnhancedOptimizer(sentiment_sensitivity=0.1)
-    print("Enhanced:", opt.optimize(mu, cov, sentiment_scores=sent))
-    # Expect AAPL weight to increase (positive sentiment)
+    enhanced_w, enhanced_m = opt.optimize(mu, cov, sentiment_weights=sent, tickers=['AAPL', 'TSLA'])
+    print("Enhanced weights:", dict(zip(['AAPL', 'TSLA'], enhanced_w)))

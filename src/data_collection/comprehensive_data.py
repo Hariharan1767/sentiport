@@ -2,7 +2,11 @@ import yfinance as yf
 import pandas as pd
 import numpy as np
 from datetime import datetime, timedelta
-from src.utils import technical_indicators as ta
+
+try:
+    from src.utils import technical_indicators as ta
+except ImportError:
+    ta = None
 
 class ComprehensiveDataLoader:
     def __init__(self):
@@ -10,6 +14,58 @@ class ComprehensiveDataLoader:
         Initializes the data loader.
         """
         pass
+
+    def fetch_price_data(self, ticker: str, period: str = "1y", interval: str = "1d"):
+        """
+        Fetches historical OHLCV price data for a ticker.
+        This is the primary method called by the API server.
+        """
+        try:
+            df = yf.download(ticker, period=period, interval=interval, progress=False)
+            if df is None or df.empty:
+                return None
+            # Flatten MultiIndex columns (happens with single ticker in newer yfinance)
+            if isinstance(df.columns, pd.MultiIndex):
+                df.columns = df.columns.get_level_values(0)
+            return df
+        except Exception as e:
+            print(f"Error fetching price data for {ticker}: {e}")
+            return None
+
+    def fetch_news(self, ticker: str, days: int = 7):
+        """
+        Fetches recent news headlines for a ticker.
+        Returns a DataFrame with columns: title, description, link, publishedAt.
+        """
+        try:
+            stock = yf.Ticker(ticker)
+            news = stock.news
+            if not news:
+                return pd.DataFrame()
+
+            articles = []
+            cutoff = datetime.now() - timedelta(days=days)
+            for item in news:
+                content = item.get('content', {})
+                title = content.get('title', item.get('title', ''))
+                description = content.get('summary', item.get('summary', ''))
+                pub_date_str = content.get('pubDate', '')
+                link = ''
+                if 'canonicalUrl' in content:
+                    link = content['canonicalUrl'].get('url', '')
+                articles.append({
+                    'title': title,
+                    'description': description,
+                    'link': link,
+                    'publishedAt': pub_date_str
+                })
+
+            if not articles:
+                return pd.DataFrame()
+            return pd.DataFrame(articles)
+        except Exception as e:
+            print(f"Error fetching news for {ticker}: {e}")
+            return pd.DataFrame()
 
     def fetch_fundamentals(self, ticker: str):
         """
@@ -98,28 +154,35 @@ class ComprehensiveDataLoader:
                 return df
 
             # Simple Moving Averages
-            df['SMA_50'] = ta.sma(df['Close'], length=50)
-            df['SMA_200'] = ta.sma(df['Close'], length=200)
-            
-            # RSI
-            df['RSI'] = ta.rsi(df['Close'], length=14)
-            
-            # MACD
-            macd_df = ta.macd(df['Close'])
-            df = pd.concat([df, macd_df], axis=1)
-            
-            # Bollinger Bands
-            bb_df = ta.bbands(df['Close'], length=20)
-            df = pd.concat([df, bb_df], axis=1)
-            
-            # ATR
-            if all(col in df.columns for col in ['High', 'Low', 'Close']):
-                df['ATR'] = ta.atr(df['High'], df['Low'], df['Close'], length=14)
+            if ta is not None:
+                try:
+                    df['SMA_50'] = ta.sma(df['Close'], length=50)
+                    df['SMA_200'] = ta.sma(df['Close'], length=200)
+                    df['RSI'] = ta.rsi(df['Close'], length=14)
+                    macd_df = ta.macd(df['Close'])
+                    df = pd.concat([df, macd_df], axis=1)
+                    bb_df = ta.bbands(df['Close'], length=20)
+                    df = pd.concat([df, bb_df], axis=1)
+                    if all(col in df.columns for col in ['High', 'Low', 'Close']):
+                        df['ATR'] = ta.atr(df['High'], df['Low'], df['Close'], length=14)
+                except Exception as ta_err:
+                    print(f"Warning: ta indicator calculation failed: {ta_err}")
+            else:
+                # Fallback: pure-pandas indicators
+                close = df['Close']
+                df['SMA_50'] = close.rolling(50).mean()
+                df['SMA_200'] = close.rolling(200).mean()
+                delta = close.diff()
+                gain = delta.clip(lower=0).rolling(14).mean()
+                loss = (-delta.clip(upper=0)).rolling(14).mean()
+                rs = gain / loss.replace(0, 1e-10)
+                df['RSI'] = 100 - (100 / (1 + rs))
 
             return df
         except Exception as e:
             print(f"Error fetching technicals for {ticker}: {e}")
             return None
+
 
     def fetch_macro_data(self):
         """
