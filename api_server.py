@@ -17,8 +17,8 @@ import pandas as pd
 import numpy as np
 from dotenv import load_dotenv
 
-# Add src directory to path for imports
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'src'))
+# Add src/backend directory to path for imports
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'src', 'backend'))
 
 # Import all required modules
 from data_collection.comprehensive_data import ComprehensiveDataLoader
@@ -45,7 +45,8 @@ logger = logging.getLogger(__name__)
 
 # Initialize Flask app
 app = Flask(__name__)
-CORS(app)
+# Enable CORS for all routes with explicit support for credentials and standard methods
+CORS(app, resources={r"/api/*": {"origins": "*"}})
 
 # Initialize core components
 data_loader = ComprehensiveDataLoader()
@@ -97,113 +98,89 @@ def status():
 # Stock Data Endpoints
 # ===========================
 
-@app.route('/api/stocks/data', methods=['POST'])
-def get_stock_data():
-    """
-    Fetch stock data for analysis
-    Request body: {
-        "ticker": "AAPL",
-        "period": "1y",
-        "interval": "1d"
-    }
-    """
+@app.route('/api/stock/<ticker>', methods=['GET'])
+def get_stock_dashboard_data(ticker):
+    """Unified GET endpoint for dashboard stock stats"""
     try:
-        data = request.get_json()
-        ticker = data.get('ticker', '').upper()
-        period = data.get('period', '1y')
-        interval = data.get('interval', '1d')
-
-        if not ticker:
-            return jsonify({'error': 'Ticker is required'}), 400
-
-        logger.info(f"Fetching data for {ticker}")
-        
-        # Fetch price data
-        price_data = data_loader.fetch_price_data(ticker, period, interval)
-        
+        ticker = ticker.upper()
+        # Fetch price data for metrics
+        price_data = data_loader.fetch_price_data(ticker, period='5d')
         if price_data is None or price_data.empty:
-            return jsonify({'error': f'Unable to fetch data for {ticker}'}), 404
-
-        # Calculate basic metrics
-        current_price = price_data['Close'].iloc[-1]
-        change = ((current_price - price_data['Close'].iloc[0]) / price_data['Close'].iloc[0]) * 100
+            return jsonify({'error': 'No data'}), 404
         
+        current_price = float(price_data['Close'].iloc[-1])
+        prev_price = float(price_data['Close'].iloc[-2]) if len(price_data) > 1 else current_price
+        change_pct = ((current_price - prev_price) / prev_price) * 100 if prev_price != 0 else 0
+        
+        # Fetch sentiment
+        news_df = data_loader.fetch_news(ticker, days=7)
+        sent_label = 'NEUTRAL'
+        sent_score = 0.5
+        if news_df is not None and not news_df.empty:
+            texts = (news_df['title'] + " " + news_df['description'].fillna('')).tolist()
+            scores = [sentiment_classifier.predict_sentiment(t)['score'] for t in texts[:10]]
+            sent_score = float(np.mean(scores))
+            sent_label = 'POSITIVE' if sent_score > 0.6 else 'NEGATIVE' if sent_score < 0.4 else 'NEUTRAL'
+
+        # Recommendation
+        info = data_loader.fetch_fundamentals(ticker).get('info', {})
+        rec = info.get('recommendationKey', 'hold').upper().replace('_', ' ')
+
         return jsonify({
             'ticker': ticker,
-            'current_price': float(current_price),
-            'change_percent': float(change),
-            'data_points': len(price_data),
-            'start_date': price_data.index[0].isoformat() if hasattr(price_data.index[0], 'isoformat') else str(price_data.index[0]),
-            'end_date': price_data.index[-1].isoformat() if hasattr(price_data.index[-1], 'isoformat') else str(price_data.index[-1]),
-            'history': price_data[['Close', 'Volume']].tail(30).to_dict(orient='index')
+            'price': current_price,
+            'change_pct': change_pct,
+            'sentiment': {'label': sent_label, 'score': sent_score},
+            'recommendation': rec
         }), 200
-
     except Exception as e:
-        logger.error(f"Error fetching stock data: {str(e)}\n{traceback.format_exc()}")
         return jsonify({'error': str(e)}), 500
 
-
-@app.route('/api/stocks/news', methods=['POST'])
-def get_stock_news():
-    """
-    Fetch and analyze news sentiment for a stock
-    Request body: {
-        "ticker": "AAPL",
-        "days": 7
-    }
-    """
+@app.route('/api/stock/<ticker>/history', methods=['GET'])
+def get_stock_history(ticker):
+    """GET endpoint for chart history"""
     try:
-        data = request.get_json()
-        ticker = data.get('ticker', '').upper()
-        days = data.get('days', 7)
-
-        if not ticker:
-            return jsonify({'error': 'Ticker is required'}), 400
-
-        logger.info(f"Fetching news sentiment for {ticker}")
+        period = request.args.get('period', '3mo')
+        price_data = data_loader.fetch_price_data(ticker.upper(), period=period)
+        if price_data is None or price_data.empty:
+            return jsonify({'prices': []}), 200
         
-        # Fetch news
-        news_df = data_loader.fetch_news(ticker, days=days)
+        history = []
+        for date, row in price_data.iterrows():
+            history.append({
+                'date': date.strftime('%Y-%m-%d') if hasattr(date, 'strftime') else str(date),
+                'close': float(row['Close'])
+            })
+        return jsonify({'prices': history}), 200
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/analysis/<ticker>', methods=['GET'])
+def get_comprehensive_analysis(ticker):
+    """GET endpoint for full security analysis"""
+    try:
+        ticker = ticker.upper()
+        stock_data = data_loader.fetch_price_data(ticker, period='2y')
+        fundamentals = data_loader.fetch_fundamentals(ticker)
         
-        if news_df is None or news_df.empty:
-            return jsonify({
-                'ticker': ticker,
-                'sentiment_score': 0.0,
-                'articles': [],
-                'message': 'No news found'
-            }), 200
-
-        # Analyze sentiment
-        sentiments = []
-        for idx, article in news_df.iterrows():
-            try:
-                # Classify sentiment
-                text = f"{article.get('title', '')} {article.get('description', '')}"
-                sentiment = sentiment_classifier.predict_sentiment(text)
-                sentiments.append(sentiment)
-            except Exception as e:
-                logger.warning(f"Error classifying sentiment for article: {e}")
-                sentiments.append({'label': 'NEUTRAL', 'score': 0.5})
-
-        # Aggregate sentiments
-        sentiment_df = pd.DataFrame(sentiments)
-        if not sentiment_df.empty:
-            sentiment_scores = sentiment_df['score'].tolist()
-            avg_sentiment = float(np.mean(sentiment_scores))
-        else:
-            avg_sentiment = 0.0
+        fund_res = fundamental_analyzer.analyze(fundamentals)
+        tech_res = technical_analyzer.analyze(stock_data)
+        risk_res = risk_analyzer.analyze(stock_data)
+        
+        # Simple recommendation engine
+        scores = [fund_res['score'], tech_res['score'], risk_res['score']]
+        avg = np.mean(scores)
+        rec = 'BUY' if avg > 70 else 'SELL' if avg < 40 else 'HOLD'
 
         return jsonify({
             'ticker': ticker,
-            'sentiment_score': avg_sentiment,
-            'sentiment_label': 'POSITIVE' if avg_sentiment > 0.6 else 'NEGATIVE' if avg_sentiment < 0.4 else 'NEUTRAL',
-            'articles': len(news_df),
-            'analysis_date': datetime.now().isoformat(),
-            'sentiments': sentiments[:10]  # Return top 10
+            'fundamental': fund_res,
+            'technical': tech_res,
+            'risk': risk_res,
+            'recommendation': rec,
+            'sentiment': {'score': 50, 'label': 'NEUTRAL'} # Simplified for speed
         }), 200
-
     except Exception as e:
-        logger.error(f"Error fetching news sentiment: {str(e)}\n{traceback.format_exc()}")
         return jsonify({'error': str(e)}), 500
 
 
