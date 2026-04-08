@@ -4,12 +4,14 @@ import Navigation from './components/Navigation'
 import Dashboard from './components/Dashboard'
 import Analysis from './components/Analysis'
 import Optimize from './components/Optimize'
+import Chatbot from './components/Chatbot'
 import Settings from './components/Settings'
 
 const PAGES = {
   dashboard: Dashboard,
   analysis: Analysis,
   optimize: Optimize,
+  chatbot: Chatbot,
   settings: Settings,
 }
 
@@ -28,14 +30,6 @@ export default function App() {
 
   return (
     <div className="min-h-screen bg-background text-white font-epilogue selection:bg-primary/30 selection:text-primary">
-      {/* RAW DEBUG PANEL - FOR TROUBLESHOOTING */}
-      <div style={{ position: 'fixed', bottom: 10, left: 10, zIndex: 9999, background: 'red', color: 'white', padding: '10px', fontSize: '12px' }}>
-        DEBUG: {currentPage} |
-        <button onClick={() => setCurrentPage('dashboard')} style={{ margin: '0 5px', color: 'black' }}>DASH</button>
-        <button onClick={() => setCurrentPage('analysis')} style={{ margin: '0 5px', color: 'black' }}>ANLY</button>
-        <button onClick={() => setCurrentPage('optimize')} style={{ margin: '0 5px', color: 'black' }}>OPT</button>
-      </div>
-
       {/* Background radial glows */}
       <div className="fixed inset-0 pointer-events-none z-0 overflow-hidden">
         <div className="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] bg-primary/10 rounded-full blur-[120px]" />

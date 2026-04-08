@@ -5,6 +5,7 @@ const NAV_LINKS = [
   { id: 'dashboard', label: 'Dashboard' },
   { id: 'analysis', label: 'Analysis' },
   { id: 'optimize', label: 'Optimize' },
+  { id: 'chatbot', label: 'Chatbot' },
   { id: 'settings', label: 'Settings' },
 ]
 

@@ -32,6 +32,7 @@ from portfolio_optimization.mean_variance import MeanVarianceOptimizer
 from portfolio_optimization.sentiment_optimizer import SentimentEnhancedOptimizer
 from prediction.orchestrator import StockAnalysisOrchestrator as PredictionOrchestrator
 from evaluation.performance_analyzer import PerformanceAnalyzer
+from chatbot.stock_chatbot import StockChatbot
 
 # Load environment variables
 load_dotenv()
@@ -60,6 +61,11 @@ mean_variance_optimizer = MeanVarianceOptimizer()
 sentiment_optimizer = SentimentEnhancedOptimizer()
 prediction_orchestrator = PredictionOrchestrator()
 performance_analyzer = PerformanceAnalyzer()
+chatbot = StockChatbot(
+    data_loader=data_loader,
+    sentiment_classifier=sentiment_classifier,
+    technical_analyzer=technical_analyzer
+)
 
 # Cache for storing analysis results (simple in-memory cache)
 analysis_cache = {}
@@ -512,6 +518,55 @@ def predict_investment():
 
     except Exception as e:
         logger.error(f"Error in prediction: {str(e)}\n{traceback.format_exc()}")
+        return jsonify({'error': str(e)}), 500
+
+
+# ===========================
+# Chatbot Endpoints
+# ===========================
+
+@app.route('/api/chatbot/ask', methods=['POST'])
+def chatbot_ask():
+    """Answer user questions about stocks"""
+    try:
+        data = request.get_json()
+        question = data.get('question', '').strip()
+        
+        if not question:
+            return jsonify({'error': 'Question is required'}), 400
+
+        response = chatbot.answer_question(question)
+        
+        return jsonify({
+            'question': question,
+            'answer': response,
+            'timestamp': datetime.now().isoformat()
+        }), 200
+
+    except Exception as e:
+        logger.error(f"Chatbot error: {str(e)}\n{traceback.format_exc()}")
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/chatbot/history', methods=['GET'])
+def chatbot_history():
+    """Get conversation history"""
+    try:
+        history = chatbot.get_conversation_history()
+        return jsonify({'history': history}), 200
+    except Exception as e:
+        logger.error(f"Error fetching history: {str(e)}")
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/chatbot/clear', methods=['POST'])
+def chatbot_clear():
+    """Clear conversation history"""
+    try:
+        chatbot.clear_history()
+        return jsonify({'status': 'cleared'}), 200
+    except Exception as e:
+        logger.error(f"Error clearing history: {str(e)}")
         return jsonify({'error': str(e)}), 500
 
 
